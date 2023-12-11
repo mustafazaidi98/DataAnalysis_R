@@ -1,0 +1,176 @@
+---
+title: "CS 422 HW4"
+author: "Syed Alle Mustafa, Illinois Institute of Technology"
+output:
+  html_notebook:
+    toc: yes
+    toc_float: yes
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+### Import Dataset
+
+```{r}
+
+# install.packages("ISLR")
+library(readxl)
+hotel_bookings <- read.csv("C:/Users/alley.mustafa/Downloads/hotel_bookings.csv")
+print(hotel_bookings)
+```
+
+### Part 2.1-i
+
+```{r}
+hotels <- table(hotel_bookings$hotel);
+h1 <- hotels["Resort Hotel"]
+resort <- hotel_bookings[hotel_bookings$hotel=="Resort Hotel",]
+print(paste("Total bookings on Resort Hotel: ",nrow(resort)))
+h2 <- hotels["City Hotel"]
+print(paste("Total booking on City Hotel:",h2))
+```
+
+### Part 2.1-ii
+
+```{r}
+canceled <- hotel_bookings[hotel_bookings$is_canceled==1,]
+cat(paste("\nNumber of guests who canceled the reservation",nrow(canceled)))
+reserved <- hotel_bookings[hotel_bookings$is_canceled==0,]
+cat(paste("\nNumber of guests who did not cancel the reservation",nrow(reserved)))
+```
+
+### Part 2.1-iii
+
+```{r}
+typeCount <- table(hotel_bookings$customer_type);
+print(typeCount)
+coun <- names(typeCount)[which.max(typeCount)]
+cat(paste("Type with the most reservation is:",paste(coun)))
+cat(paste(", it has count :",typeCount[which.max(typeCount)]))
+```
+
+### Part 2.1-iv
+
+```{r}
+ParkTable = table(hotel_bookings$required_car_parking_spaces)
+maxParking <- names(which.max(ParkTable))
+max_count <- max(ParkTable)
+cat(paste(max_count," customers required the most number of parking spaces  ",maxParking))
+```
+
+
+### Part 2.1-v
+```{r}
+minParking <- names(which.min(ParkTable))
+min_count <- min(ParkTable)
+cat(paste(min_count," customers required the minimum number of parking spaces ",minParking))
+```
+### Part 2.1-vi
+```{r}
+totalPreference = sum(!is.na(hotel_bookings$reserved_room_type))
+print(totalPreference)
+totalGotPrefered = sum(hotel_bookings$reserved_room_type == hotel_bookings$assigned_room_type)
+print(totalGotPrefered)
+cat(paste(round(totalGotPrefered*100/totalPreference,2),"% of the people who expressed a room preference during reservation got the room during check-in."))
+```
+
+
+
+### Part 2.1-vii
+```{r}
+bookings_city <- hotel_bookings %>% filter(hotel_bookings$hotel == "City Hotel")  %>% filter(country!="NULL")
+countryList_city = bookings_city %>% count(country) %>% top_n(10)
+countryList_city = countryList_city[order(countryList_city$n, decreasing=TRUE),]
+barplot(countryList_city$n, 
+        main = "Top 10 countries of origin for City hotels", 
+        xlab = "Country", 
+        ylab = "Number of bookings",
+        col = c("blue", "red", "green", "orange", "purple", "pink", "gray", "brown", "cyan", "magenta"),
+        names.arg = countryList_city$country, cex.names=.7)
+
+bookings_resort <- hotel_bookings %>% filter(hotel_bookings$hotel == "Resort Hotel")%>% filter(country!="NULL")
+countryList_resort = bookings_resort %>% count(country) %>% top_n(10)
+countryList_resort = countryList_resort[order(countryList_resort$n, decreasing=TRUE),]
+barplot(countryList_resort$n, 
+        main = "Top 10 countries of origin for Resort hotels", 
+        xlab = "Country", 
+        ylab = "Number of bookings",
+        col = c("blue", "red", "green", "orange", "purple", "pink", "gray", "brown", "cyan", "magenta"),
+        names = countryList_resort$country, cex.names=.7)
+```
+
+
+### Part 2.1-viii
+
+```{r}
+countr = table(hotel_bookings$country)
+maxCountry <- names(which.max(countr))
+print(maxCountry)
+cat("This tells that the data recorded can possibly be based on PRT, that is both the hotels are located in PRT, which can be a possibility.")
+```
+
+### Part 2.2-a
+```{r}
+
+library(rpart.plot)
+library(rpart)
+set.seed(1122)
+str(hotel_bookings)
+n <- nrow(hotel_bookings)
+library(vcd)
+# extract categorical variables from data
+categorical_vars <- hotel_bookings[sapply(hotel_bookings,is.character)]
+categorical_vars$deposit_type <- as.factor(categorical_vars$deposit_type) 
+#reservation_status+assigned_room_type+reservation_status_date+agent+assigned_room_type
+cat(" The columns that are reservation status, assigned room type, reservation status date, agent id and assigned room type occur after it is decided whether the user cancelled or not, hence these columns won't be used for decision tree.\n for rest of them tests will be performed.")
+
+numeric_data <- select_if(hotel_bookings, is.numeric)
+numeric_data <- cbind(numeric_data)
+# calculate correlation coefficients
+correlation <- cor(numeric_data,hotel_bookings$is_canceled)
+print(correlation)
+hotel_bookings$is_canceled <- factor(hotel_bookings$is_canceled)
+set.seed(1122)
+index <- sample(1:nrow(hotel_bookings), 0.90 * dim(hotel_bookings)[1])
+train.df <- hotel_bookings[index, ]
+test.df <- hotel_bookings[-index, ]
+tree <- rpart(is_canceled ~ lead_time
++previous_cancellations+customer_type+deposit_type, data = train.df)
+cat("\nWe choose the numeric variables with highest correlation score.\n")
+```
+### Part 2.2-a-i
+```{r}
+rpart.plot(tree,type = 4, under = TRUE, fallen.leaves = TRUE, branch.lty = 2)
+```
+
+### Part 2.2-b
+```{r}
+summary(tree)
+cat("Important variables for the decision tree are the deposit type, lead time, and previous cancellation. They seem to be most important since they appear to be on the top of the tree heirarchy. and can also be seen through variable importance tree.")
+```
+
+### Part 2.2-c
+```{r}
+library(caret)
+pr <- predict(tree, test.df, type="class")
+totalPositive = sum(test.df[, c("is_canceled")]==1)
+totalNegative = sum(test.df[, c("is_canceled")]==0)
+truePositive = sum(test.df[, c("is_canceled")]==1&pr==1)
+trueNegative = sum(test.df[, c("is_canceled")]==0&pr==0)
+cm <- confusionMatrix(pr,as.factor(test.df[, c("is_canceled")]))
+accuracy <- cm$overall["Accuracy"]
+error <- 1 - accuracy
+balAcc <- cm$byClass["Balanced Accuracy"]
+specificity <- cm$byClass["Specificity"]
+sensitivity <- cm$byClass["Sensitivity"]
+precision <- cm$byClass["Pos Pred Value"]
+cat("Total positives of test data: ", totalPositive, "\n")
+cat("Total negatives of test data: ", totalNegative, "\n")
+cat("Accuracy of the model: ", round(accuracy*100,2), "%\n")
+cat("Error of the model: ",round(error*100,2), "%\n")
+cat("Balanced Accuracy of the model: ",round(balAcc*100,2), "%\n")
+cat("Specificity of the model: ", round(specificity*100,2), "%\n")
+cat("Sensitivity of the model: ", round(sensitivity*100,2), "%\n")
+cat("Precision of the model: ", round(precision*100,2), "%\n")
+```
